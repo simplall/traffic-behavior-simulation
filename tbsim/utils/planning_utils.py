@@ -184,38 +184,40 @@ def ego_sample_planning(
         depth = 3
         min_dis = np.inf*np.ones([bs,Ne])
         for i,vmap in enumerate(vector_map):
-            
             nearby_lanes = vmap.get_lanes_within(world_xyz[i,0,0],30)
-            dis = np.inf*np.ones([len(nearby_lanes)])
-            for j,lane in enumerate(nearby_lanes):
-                dx,dy,dh = GeoUtils.batch_proj(world_xyh[i,0,0],lane.center.points[None,...,[0,1,3]])
-                pts_idx = np.abs(dx).argmin(-1)
-                dy_min = np.abs(dy[0,pts_idx])
-                if (dx.min(-1)<0) & (dx.max(-1)>0) & (dy_min<2) & (np.abs(dh)<np.pi/4):
-                    dis[j] = dy_min+5*np.abs(dh)
-                else:
-                    continue
-            current_lane = nearby_lanes[np.argmin(dis)]
-            relevant_lanes = [{current_lane}]
-            for d in range(depth):
-                next_lanes = set()
-                for lane in relevant_lanes[d]:
-                    next_lanes.update({vmap.get_road_lane(id) for id in lane.next_lanes})
-                relevant_lanes.append(next_lanes)
-            for d in range(depth):
-                relevant_lanes[depth].update(relevant_lanes[d])
-            relevant_lanes = relevant_lanes[depth]
-            
-            for lane in relevant_lanes:
-                dx,dy,dh = GeoUtils.batch_proj(world_xyh[i,:,-1],lane.center.points[None,...,[0,1,3]].repeat(Ne,0))
-                dh = np.abs(dh).squeeze(-1)
-                pts_idx = np.abs(dx).argmin(-1)
-                dy_min = np.abs(np.take_along_axis(dy,pts_idx[...,None],-1).squeeze(-1))
-                
-                onroute_flag = (dx.min(-1)<0) & (dx.max(-1)>0) & (dy_min<2) & (dh<np.pi/4)
-                dis = dy_min+5*dh
-                dis[~onroute_flag] = np.inf
-                min_dis[i] = np.minimum(min_dis[i],dis)
+            if(len(nearby_lanes) != 0):
+                dis = np.inf * np.ones([len(nearby_lanes)])
+                for j, lane in enumerate(nearby_lanes):
+                    dx, dy, dh = GeoUtils.batch_proj(world_xyh[i, 0, 0], lane.center.points[None, ..., [0, 1, 3]])
+                    pts_idx = np.abs(dx).argmin(-1)
+                    dy_min = np.abs(dy[0, pts_idx])
+                    if (dx.min(-1) < 0) & (dx.max(-1) > 0) & (dy_min < 2) & (np.abs(dh) < np.pi / 4):
+                        dis[j] = dy_min + 5 * np.abs(dh)
+                    else:
+                        continue
+                current_lane = nearby_lanes[np.argmin(dis)]
+                relevant_lanes = [{current_lane}]
+                for d in range(depth):
+                    next_lanes = set()
+                    for lane in relevant_lanes[d]:
+                        next_lanes.update({vmap.get_road_lane(id) for id in lane.next_lanes})
+                    relevant_lanes.append(next_lanes)
+                for d in range(depth):
+                    relevant_lanes[depth].update(relevant_lanes[d])
+                relevant_lanes = relevant_lanes[depth]
+
+                for lane in relevant_lanes:
+                    dx, dy, dh = GeoUtils.batch_proj(world_xyh[i, :, -1],
+                                                     lane.center.points[None, ..., [0, 1, 3]].repeat(Ne, 0))
+                    dh = np.abs(dh).squeeze(-1)
+                    pts_idx = np.abs(dx).argmin(-1)
+                    dy_min = np.abs(np.take_along_axis(dy, pts_idx[..., None], -1).squeeze(-1))
+
+                    onroute_flag = (dx.min(-1) < 0) & (dx.max(-1) > 0) & (dy_min < 2) & (dh < np.pi / 4)
+                    dis = dy_min + 5 * dh
+                    dis[~onroute_flag] = np.inf
+                    min_dis[i] = np.minimum(min_dis[i], dis)
+
         lane_dir_loss = torch.from_numpy(min_dis).to(ego_trajectories.device)
         lane_dir_loss = torch.clip(lane_dir_loss,min=0,max=10)
         total_score-=weights["lane_dir_weight"]*lane_dir_loss
